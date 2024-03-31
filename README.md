@@ -1,4 +1,4 @@
-CARTOONIFY YOUR IMAGE
+CARTOONIFY YOUR IMAGE:
 This Python script allows you to transform your images into cartoon-like representations. 
 It utilizes various image processing techniques such as edge detection, smoothing, and filtering to achieve the cartoon effect.
 
