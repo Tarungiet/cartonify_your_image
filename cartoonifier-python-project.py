@@ -1,104 +1,63 @@
-import cv2 #for image processing
-import easygui #to open the filebox
-import numpy as np #to store image
-import imageio #to read image stored at particular path
-
-import sys
+# cartoonify_cli.py
+import cv2
+import numpy as np
+import imageio
+import matplotlib
+matplotlib.use('Agg')      # headless backend (no display)
 import matplotlib.pyplot as plt
 import os
-import tkinter as tk
-from tkinter import filedialog
-from tkinter import *
-from PIL import ImageTk, Image
+import sys
+import argparse
 
-top=tk.Tk()
-top.geometry('400x400')
-top.title('Cartoonify Your Image !')
-top.configure(background='white')
-label=Label(top,background='#CDCDCD', font=('calibri',20,'bold'))
-
-def upload():
-    ImagePath=easygui.fileopenbox()
-    cartoonify(ImagePath)
-
-
-def cartoonify(ImagePath):
+def cartoonify_image(image_path, out_dir):
     # read the image
-    originalmage = cv2.imread(ImagePath)
-    originalmage = cv2.cvtColor(originalmage, cv2.COLOR_BGR2RGB)
-    #print(image)  # image is stored in form of numbers
+    original = cv2.imread(image_path)
+    if original is None:
+        print(f"ERROR: cannot read image: {image_path}")
+        sys.exit(2)
 
-    # confirm that image is chosen
-    if originalmage is None:
-        print("Can not find any image. Choose appropriate file")
-        sys.exit()
+    original = cv2.cvtColor(original, cv2.COLOR_BGR2RGB)
+    ReSized1 = cv2.resize(original, (960, 540))
 
-    ReSized1 = cv2.resize(originalmage, (960, 540))
-    #plt.imshow(ReSized1, cmap='gray')
+    # grayscale + smoothing
+    gray = cv2.cvtColor(original, cv2.COLOR_BGR2GRAY)
+    smoothGrayScale = cv2.medianBlur(gray, 5)
 
+    # edges
+    edges = cv2.adaptiveThreshold(smoothGrayScale, 255,
+                                  cv2.ADAPTIVE_THRESH_MEAN_C,
+                                  cv2.THRESH_BINARY, 9, 9)
 
-    #converting an image to grayscale
-    grayScaleImage= cv2.cvtColor(originalmage, cv2.COLOR_BGR2GRAY)
-    ReSized2 = cv2.resize(grayScaleImage, (960, 540))
-    #plt.imshow(ReSized2, cmap='gray')
+    # bilateral filter for color
+    color = cv2.bilateralFilter(original, 9, 300, 300)
 
+    # mask edges with color
+    cartoon = cv2.bitwise_and(color, color, mask=edges)
+    ReSized6 = cv2.resize(cartoon, (960, 540))
 
-    #applying median blur to smoothen an image
-    smoothGrayScale = cv2.medianBlur(grayScaleImage, 5)
-    ReSized3 = cv2.resize(smoothGrayScale, (960, 540))
-    #plt.imshow(ReSized3, cmap='gray')
+    # save result
+    os.makedirs(out_dir, exist_ok=True)
+    base = os.path.splitext(os.path.basename(image_path))[0]
+    out_path = os.path.join(out_dir, f"{base}_cartoonified.png")
+    cv2.imwrite(out_path, cv2.cvtColor(ReSized6, cv2.COLOR_RGB2BGR))
+    print(f"Saved cartoon image: {out_path}")
 
-    #retrieving the edges for cartoon effect
-    #by using thresholding technique
-    getEdge = cv2.adaptiveThreshold(smoothGrayScale, 255, 
-        cv2.ADAPTIVE_THRESH_MEAN_C, 
-        cv2.THRESH_BINARY, 9, 9)
-
-    ReSized4 = cv2.resize(getEdge, (960, 540))
-    #plt.imshow(ReSized4, cmap='gray')
-
-    #applying bilateral filter to remove noise 
-    #and keep edge sharp as required
-    colorImage = cv2.bilateralFilter(originalmage, 9, 300, 300)
-    ReSized5 = cv2.resize(colorImage, (960, 540))
-    #plt.imshow(ReSized5, cmap='gray')
-
-
-    #masking edged image with our "BEAUTIFY" image
-    cartoonImage = cv2.bitwise_and(colorImage, colorImage, mask=getEdge)
-
-    ReSized6 = cv2.resize(cartoonImage, (960, 540))
-    #plt.imshow(ReSized6, cmap='gray')
-
-    # Plotting the whole transition
-    images=[ReSized1, ReSized2, ReSized3, ReSized4, ReSized5, ReSized6]
-
-    fig, axes = plt.subplots(3,2, figsize=(8,8), subplot_kw={'xticks':[], 'yticks':[]}, gridspec_kw=dict(hspace=0.1, wspace=0.1))
+    # optional: save a combined preview image (grid) for easier CI viewing
+    images = [ReSized1, cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB),
+              cv2.cvtColor(smoothGrayScale, cv2.COLOR_GRAY2RGB),
+              cv2.cvtColor(edges, cv2.COLOR_GRAY2RGB),
+              ReSized6, ReSized6]
+    fig, axes = plt.subplots(3, 2, figsize=(8, 8), subplot_kw={'xticks':[], 'yticks':[]})
     for i, ax in enumerate(axes.flat):
-        ax.imshow(images[i], cmap='gray')
+        ax.imshow(images[i])
+    preview_path = os.path.join(out_dir, f"{base}_preview.png")
+    fig.savefig(preview_path, bbox_inches='tight')
+    print(f"Saved preview image: {preview_path}")
+    plt.close(fig)
 
-    save1=Button(top,text="Save cartoon image",command=lambda: save(ReSized6, ImagePath),padx=30,pady=5)
-    save1.configure(background='#364156', foreground='white',font=('calibri',10,'bold'))
-    save1.pack(side=TOP,pady=50)
-    
-    plt.show()
-    
-    
-def save(ReSized6, ImagePath):
-    #saving an image using imwrite()
-    newName="cartoonified_Image"
-    path1 = os.path.dirname(ImagePath)
-    extension=os.path.splitext(ImagePath)[1]
-    path = os.path.join(path1, newName+extension)
-    cv2.imwrite(path, cv2.cvtColor(ReSized6, cv2.COLOR_RGB2BGR))
-    I= "Image saved by name " + newName +" at "+ path
-    tk.messagebox.showinfo(title=None, message=I)
-
-upload=Button(top,text="Cartoonify an Image",command=upload,padx=10,pady=5)
-upload.configure(background='#364156', foreground='white',font=('calibri',10,'bold'))
-upload.pack(side=TOP,pady=50)
-
-top.mainloop()
-
-
-
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Cartoonify an image (CLI)")
+    parser.add_argument("--input", "-i", default="input/sample.jpg", help="Input image path")
+    parser.add_argument("--out", "-o", default="output", help="Output directory")
+    args = parser.parse_args()
+    cartoonify_image(args.input, args.out)
